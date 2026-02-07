@@ -1,5 +1,10 @@
 <h1 align="center"><img src="images/icon.png" alt="" width="32" height="32"> GitNote</h1>
 
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=amaya382.gitnote"><img src="https://img.shields.io/visual-studio-marketplace/v/amaya382.gitnote" alt="VS Marketplace Version"></a>
+  <a href="https://github.com/amaya382/gitnote/blob/main/LICENSE"><img src="https://img.shields.io/github/license/amaya382/gitnote" alt="License"></a>
+</p>
+
 A simple, stable VSCode extension that keeps your notes in sync with Git. Automatically commits, pushes, and pulls — so you can focus on writing.
 
 Works on both **desktop VSCode** and **github.dev** (browser).
@@ -35,6 +40,10 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 
 ## Installation
 
+### From Marketplace (recommended)
+
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=amaya382.gitnote), or search **"GitNote"** in the VSCode Extensions panel.
+
 ### From source
 
 ```bash
@@ -45,13 +54,6 @@ npm run compile
 ```
 
 Press `F5` in VSCode to launch the Extension Development Host.
-
-### From VSIX
-
-```bash
-npm run package
-code --install-extension gitnote-0.1.0.vsix
-```
 
 ## Quick start
 

@@ -15,7 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - File filtering via glob patterns
 - Branch exclusion list
 - Conflict detection with configurable behavior (pause / notify)
+- Rebase detection with automatic pause
+- External commit detection to prevent interference with manual commits
+- Branch switch detection with automatic pause/resume on excluded branches
 - Commit on VSCode close
-- Customizable commit message format with template variables
+- Customizable commit message format with template variables (`{timestamp}`, `{date}`, `{time}`, `{branch}`, `{files}`, `{count}`)
 - Status bar indicator with real-time state display
+- Countdown timer display in status bar (toggleable)
+- Configuration changes applied in real-time without restart
+- Output channel logging for diagnostics
+- github.dev (Web environment) support with atomic commit and push
 - Commands: Enable, Disable, Toggle, Sync Now
