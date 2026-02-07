@@ -1,0 +1,161 @@
+{
+  "name": "gitnote",
+  "displayName": "GitNote",
+  "description": "Auto-commit, push, and pull for note-taking repositories",
+  "version": "0.1.0",
+  "publisher": "amaya382",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amaya382/gitnote"
+  },
+  "homepage": "https://github.com/amaya382/gitnote#readme",
+  "bugs": {
+    "url": "https://github.com/amaya382/gitnote/issues"
+  },
+  "icon": "images/icon.png",
+  "keywords": [
+    "git",
+    "notes",
+    "auto-commit",
+    "auto-push",
+    "auto-pull",
+    "sync",
+    "note-taking",
+    "markdown",
+    "backup"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:.git"
+  ],
+  "extensionKind": [
+    "workspace",
+    "ui"
+  ],
+  "main": "./out/extension.js",
+  "browser": "./out/web/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitnote.enable",
+        "title": "GitNote: Enable"
+      },
+      {
+        "command": "gitnote.disable",
+        "title": "GitNote: Disable"
+      },
+      {
+        "command": "gitnote.toggle",
+        "title": "GitNote: Toggle"
+      },
+      {
+        "command": "gitnote.syncNow",
+        "title": "GitNote: Sync Now"
+      }
+    ],
+    "configuration": {
+      "title": "GitNote",
+      "properties": {
+        "gitnote.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable GitNote auto-commit/push/pull"
+        },
+        "gitnote.commitDelay": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "description": "Delay in seconds before auto-commit after file save"
+        },
+        "gitnote.autoPush": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically push after commit"
+        },
+        "gitnote.pullOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically pull on startup"
+        },
+        "gitnote.pullAfterIdle": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically pull on first interaction after idle period"
+        },
+        "gitnote.idleThreshold": {
+          "type": "number",
+          "default": 300,
+          "minimum": 60,
+          "description": "Idle threshold in seconds (default: 5 minutes)"
+        },
+        "gitnote.filePattern": {
+          "type": "string",
+          "default": "**/*",
+          "description": "Glob pattern for files to auto-commit"
+        },
+        "gitnote.excludeBranches": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Branches to exclude from auto-commit"
+        },
+        "gitnote.commitMessageFormat": {
+          "type": "string",
+          "default": "GitNote: {timestamp}",
+          "description": "Commit message format. Variables: {timestamp}, {date}, {time}, {branch}, {files}, {count}"
+        },
+        "gitnote.commitOnClose": {
+          "type": "boolean",
+          "default": true,
+          "description": "Commit pending changes when VSCode closes"
+        },
+        "gitnote.showCountdown": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show countdown timer in status bar"
+        },
+        "gitnote.conflictBehavior": {
+          "type": "string",
+          "enum": [
+            "pause",
+            "notify"
+          ],
+          "default": "pause",
+          "description": "Behavior when merge conflicts are detected: 'pause' suspends automation, 'notify' shows a notification"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc --noEmit && node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test:unit": "vitest run",
+    "test:integration": "vscode-test",
+    "test": "npm run test:unit",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/minimatch": "^5.1.2",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.19.11",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "dependencies": {
+    "minimatch": "^9.0.3"
+  }
+}
