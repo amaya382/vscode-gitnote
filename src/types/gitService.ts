@@ -14,4 +14,6 @@ export interface IGitService extends vscode.Disposable {
   push(): Promise<void>;
   pull(): Promise<void>;
   cancelRetry(): void;
+  /** Fetch and cache the current branch name. No-op if already known. */
+  fetchBranch(): Promise<void>;
 }

@@ -38,6 +38,7 @@ export class OperationCoordinator implements vscode.Disposable {
   private locked = false;
   private isOwnCommit = false;
   private lastActivityTime = Date.now();
+  private lastWindowFocusTime = Date.now();
   private config: GitNoteConfig;
   private disposables: vscode.Disposable[] = [];
 
@@ -104,6 +105,13 @@ export class OperationCoordinator implements vscode.Disposable {
         this.lastActivityTime = Date.now();
       }),
     );
+
+    // Track window focus for pull-on-idle
+    this.disposables.push(
+      vscode.window.onDidChangeWindowState((e) => {
+        this.onWindowStateChanged(e);
+      }),
+    );
   }
 
   get currentState(): CoordinatorState {
@@ -120,7 +128,8 @@ export class OperationCoordinator implements vscode.Disposable {
       return;
     }
 
-    if (this.supportsFullGit && this.isBranchExcluded()) {
+    await this.gitService.fetchBranch();
+    if (this.isBranchExcluded()) {
       logger.info(
         `Branch '${this.gitService.currentBranch}' is excluded, pausing`,
       );
@@ -131,8 +140,8 @@ export class OperationCoordinator implements vscode.Disposable {
     this.setState("watching");
     logger.info("GitNote started");
 
-    // Pull on startup if configured (desktop only)
-    if (this.supportsFullGit && this.config.pullOnStartup) {
+    // Pull on startup if configured
+    if (this.config.pullOnStartup && this.gitService.hasRemote) {
       await this.executePull();
     }
   }
@@ -146,6 +155,7 @@ export class OperationCoordinator implements vscode.Disposable {
   }
 
   async syncNow(): Promise<void> {
+    logger.info("Sync Now triggered");
     if (this.locked) {
       logger.warn("Operation in progress, skipping sync");
       return;
@@ -154,43 +164,112 @@ export class OperationCoordinator implements vscode.Disposable {
     this.debouncedCommit.cancel();
     this.stopCountdown();
 
-    if (this.supportsFullGit) {
+    if (this.gitService.hasRemote) {
       await this.executePull();
     }
-    await this.executeCommitPipeline();
-  }
 
-  async flushOnClose(): Promise<void> {
-    if (!this.config.enabled || !this.config.commitOnClose) {
+    const changes = this.gitService.getMatchingChanges(this.config);
+    if (changes.length === 0) {
+      logger.info("Sync Now: No pending changes to commit");
       return;
     }
 
-    // Cancel debounce and commit immediately
+    await this.executeCommitPipeline();
+  }
+
+  private onWindowStateChanged(e: vscode.WindowState): void {
+    if (!e.focused) {
+      logger.info("Window lost focus, idle timer started");
+      // Flush pending changes immediately on focus loss
+      if (this.config.enabled && this.config.commitOnFocusLost) {
+        void this.flushOnFocusLost();
+      }
+      return;
+    }
+
+    if (!this.config.pullAfterIdle) {
+      return;
+    }
+
+    const now = Date.now();
+    const idleDuration = now - this.lastActivityTime;
+    const timeSinceLastFocus = now - this.lastWindowFocusTime;
+
+    this.lastWindowFocusTime = now;
+
+    // Skip if we just regained focus recently (prevent duplicate pulls)
+    const MIN_FOCUS_INTERVAL = 10000; // 10 seconds
+    if (timeSinceLastFocus < MIN_FOCUS_INTERVAL) {
+      return;
+    }
+
+    if (idleDuration >= this.config.idleThreshold) {
+      logger.info(
+        `Window regained focus after ${Math.round(idleDuration / 1000)}s idle, pulling`,
+      );
+      // Reset activity time to prevent onChangeDetected pullAfterIdle from also triggering
+      this.lastActivityTime = Date.now();
+      void this.executePullOnFocus();
+    }
+  }
+
+  private async flushOnFocusLost(): Promise<void> {
     this.debouncedCommit.cancel();
+    this.stopCountdown();
 
     const changes = this.gitService.getMatchingChanges(this.config);
     if (changes.length === 0) {
       return;
     }
 
-    logger.info("Committing pending changes on close");
+    if (this.locked) {
+      logger.info("flushOnFocusLost: locked, skipping");
+      return;
+    }
+
+    logger.info(`flushOnFocusLost: committing ${changes.length} pending change(s)`);
     try {
       await this.acquireLock();
+      this.setState("committing");
+
       this.isOwnCommit = true;
       await this.gitService.stageAndCommit(this.config, changes);
-      // Best-effort push on close
+      logger.info("flushOnFocusLost: commit succeeded");
+
       if (this.config.autoPush) {
-        try {
-          await this.gitService.push();
-        } catch {
-          logger.warn("Push on close failed (best-effort)");
-        }
+        this.setState("pushing");
+        await this.gitService.push();
       }
+
+      this.setState("watching");
     } catch (err) {
-      logger.error("Commit on close failed", err);
+      logger.error("flushOnFocusLost failed", err);
+      this.setState("error");
+      setTimeout(() => {
+        if (this.state === "error") {
+          this.setState("watching");
+        }
+      }, 5000);
     } finally {
       this.releaseLock();
     }
+  }
+
+  private async executePullOnFocus(): Promise<void> {
+    if (this.locked) {
+      return;
+    }
+
+    if (this.state !== "watching" && this.state !== "idle") {
+      logger.info(`Skipping pull-on-focus, current state: ${this.state}`);
+      return;
+    }
+
+    if (!this.gitService.hasRemote) {
+      return;
+    }
+
+    await this.executePull();
   }
 
   private onChangeDetected(): void {
@@ -198,8 +277,8 @@ export class OperationCoordinator implements vscode.Disposable {
       return;
     }
 
-    // Idle detection: if pull after idle is enabled, check if we were idle (desktop only)
-    if (this.supportsFullGit && this.config.pullAfterIdle) {
+    // Idle detection: if pull after idle is enabled, check if we were idle
+    if (this.config.pullAfterIdle) {
       const idleDuration = Date.now() - this.lastActivityTime;
       if (idleDuration >= this.config.idleThreshold) {
         logger.info(
@@ -292,9 +371,6 @@ export class OperationCoordinator implements vscode.Disposable {
   }
 
   private async executePull(): Promise<void> {
-    if (!this.supportsFullGit) {
-      return;
-    }
     if (this.locked) {
       logger.warn("Locked, skipping pull");
       return;
@@ -344,9 +420,6 @@ export class OperationCoordinator implements vscode.Disposable {
   }
 
   private isBranchExcluded(): boolean {
-    if (!this.supportsFullGit) {
-      return false;
-    }
     const branch = this.gitService.currentBranch;
     if (!branch) {
       return false;

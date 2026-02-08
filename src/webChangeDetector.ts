@@ -15,11 +15,14 @@ export class WebChangeDetector implements IChangeDetector {
   private readonly workspaceRoot: vscode.Uri | undefined;
   /** URIs of files saved since last commit, used by WebGitService */
   readonly pendingSaves: Set<string> = new Set();
+  /** URIs of files deleted since last commit, used by WebGitService */
+  readonly pendingDeletions: Set<string> = new Set();
 
   constructor(private filePattern: string) {
     const folders = vscode.workspace.workspaceFolders;
     this.workspaceRoot = folders?.[0]?.uri;
 
+    // Track file saves
     this.disposables.push(
       vscode.workspace.onDidSaveTextDocument((doc) => {
         if (this.isRelevantFile(doc.uri)) {
@@ -32,10 +35,68 @@ export class WebChangeDetector implements IChangeDetector {
         }
       }),
     );
+
+    // Track file deletions
+    this.disposables.push(
+      vscode.workspace.onDidDeleteFiles((e) => {
+        for (const uri of e.files) {
+          if (this.isRelevantFile(uri)) {
+            const rel = this.workspaceRoot
+              ? relativePath(this.workspaceRoot, uri)
+              : uri.path;
+            logger.info(`File deleted: ${rel}`);
+            this.pendingDeletions.add(uri.toString());
+            this.pendingSaves.delete(uri.toString());
+            this._onDidDetectChange.fire();
+          }
+        }
+      }),
+    );
+
+    // Track file creations (new files)
+    this.disposables.push(
+      vscode.workspace.onDidCreateFiles((e) => {
+        for (const uri of e.files) {
+          if (this.isRelevantFile(uri)) {
+            const rel = this.workspaceRoot
+              ? relativePath(this.workspaceRoot, uri)
+              : uri.path;
+            logger.info(`File created: ${rel}`);
+            this.pendingSaves.add(uri.toString());
+            this._onDidDetectChange.fire();
+          }
+        }
+      }),
+    );
+
+    // Track file renames (treated as delete + create)
+    this.disposables.push(
+      vscode.workspace.onDidRenameFiles((e) => {
+        for (const { oldUri, newUri } of e.files) {
+          if (this.isRelevantFile(oldUri)) {
+            const rel = this.workspaceRoot
+              ? relativePath(this.workspaceRoot, oldUri)
+              : oldUri.path;
+            logger.info(`File renamed from: ${rel}`);
+            this.pendingDeletions.add(oldUri.toString());
+            this.pendingSaves.delete(oldUri.toString());
+          }
+          if (this.isRelevantFile(newUri)) {
+            const rel = this.workspaceRoot
+              ? relativePath(this.workspaceRoot, newUri)
+              : newUri.path;
+            logger.info(`File renamed to: ${rel}`);
+            this.pendingSaves.add(newUri.toString());
+          }
+        }
+        this._onDidDetectChange.fire();
+      }),
+    );
   }
 
   clearPendingSaves(): void {
     this.pendingSaves.clear();
+    this.pendingDeletions.clear();
   }
 
   updateFilePattern(pattern: string): void {

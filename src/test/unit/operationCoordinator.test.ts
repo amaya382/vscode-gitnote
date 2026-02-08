@@ -30,6 +30,7 @@ vi.mock("vscode", () => {
       }),
       showWarningMessage: vi.fn(),
       onDidChangeActiveTextEditor: vi.fn(() => ({ dispose: vi.fn() })),
+      onDidChangeWindowState: vi.fn(() => ({ dispose: vi.fn() })),
     },
     workspace: {
       getConfiguration: () => ({
@@ -92,6 +93,7 @@ function createMockGitService(): IGitService {
     push: vi.fn().mockResolvedValue(undefined),
     pull: vi.fn().mockResolvedValue(undefined),
     cancelRetry: vi.fn(),
+    fetchBranch: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn(),
   };
 }
@@ -185,8 +187,9 @@ describe("OperationCoordinator", () => {
       filePattern: "**/*",
       excludeBranches: [],
       commitMessageFormat: "GitNote: {timestamp}",
-      commitOnClose: true,
+      commitOnFocusLost: true,
       conflictBehavior: "pause",
+      showCountdown: true,
     });
 
     await coordinator.start();
@@ -204,8 +207,9 @@ describe("OperationCoordinator", () => {
       filePattern: "**/*",
       excludeBranches: [],
       commitMessageFormat: "GitNote: {timestamp}",
-      commitOnClose: true,
+      commitOnFocusLost: true,
       conflictBehavior: "pause",
+      showCountdown: true,
     });
 
     await coordinator.start();
@@ -223,8 +227,9 @@ describe("OperationCoordinator", () => {
       filePattern: "**/*",
       excludeBranches: [],
       commitMessageFormat: "GitNote: {timestamp}",
-      commitOnClose: true,
+      commitOnFocusLost: true,
       conflictBehavior: "pause",
+      showCountdown: true,
     });
 
     await coordinator.start();
@@ -243,8 +248,9 @@ describe("OperationCoordinator", () => {
       filePattern: "**/*",
       excludeBranches: ["main"],
       commitMessageFormat: "GitNote: {timestamp}",
-      commitOnClose: true,
+      commitOnFocusLost: true,
       conflictBehavior: "pause",
+      showCountdown: true,
     });
 
     await coordinator.start();

@@ -57,6 +57,23 @@ export async function activate(
 function initializeWeb(context: vscode.ExtensionContext): void {
   logger.info("Initializing in web mode (github.dev)");
 
+  // Check if workspace is a Git repository
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) {
+    logger.info("No workspace folder found - GitNote will not activate");
+    return;
+  }
+
+  // In github.dev, the URI scheme is "vscode-vfs" with authority "github..."
+  // Only activate if this looks like a GitHub repository
+  if (workspaceFolder.uri.scheme !== "vscode-vfs" ||
+      !workspaceFolder.uri.authority.startsWith("github")) {
+    logger.info(`Not a GitHub repository (scheme: ${workspaceFolder.uri.scheme}, authority: ${workspaceFolder.uri.authority}) - GitNote will not activate`);
+    return;
+  }
+
+  logger.info(`GitHub repository detected: ${workspaceFolder.uri.toString()}`);
+
   // Dynamic imports to avoid bundling Node.js-dependent code in web build
   // when tree-shaking isn't enough. esbuild bundles everything, so we use
   // inline requires that only execute in the web path.
@@ -64,6 +81,8 @@ function initializeWeb(context: vscode.ExtensionContext): void {
   const { WebGitService } = require("./webGitService") as typeof import("./webGitService");
 
   const config = configService!.get();
+  logger.info(`Web mode initial config - enabled: ${config.enabled}`);
+
   const changeDetector = new WebChangeDetector(config.filePattern);
   const gitService = new WebGitService(changeDetector);
 
@@ -77,7 +96,10 @@ function initializeWeb(context: vscode.ExtensionContext): void {
   connectStatusBar(context);
 
   if (config.enabled) {
+    logger.info("Auto-starting GitNote (enabled in settings)");
     coordinator.start();
+  } else {
+    logger.info("GitNote not auto-started (disabled in settings)");
   }
 }
 
@@ -159,6 +181,8 @@ function initializeWithRepository(
   const { DesktopChangeDetector } = require("./desktopChangeDetector") as typeof import("./desktopChangeDetector");
 
   const config = configService!.get();
+  logger.info(`Desktop mode initial config - enabled: ${config.enabled}`);
+
   const gitService = new DesktopGitService(repository);
   const changeDetector = new DesktopChangeDetector(repository, config.filePattern);
 
@@ -173,7 +197,10 @@ function initializeWithRepository(
   connectStatusBar(context);
 
   if (config.enabled) {
+    logger.info("Auto-starting GitNote (enabled in settings)");
     coordinator.start();
+  } else {
+    logger.info("GitNote not auto-started (disabled in settings)");
   }
 }
 
@@ -192,12 +219,7 @@ function connectStatusBar(context: vscode.ExtensionContext): void {
   );
 }
 
-export async function deactivate(): Promise<void> {
+export function deactivate(): void {
   logger.info("GitNote deactivating...");
-
-  if (coordinator) {
-    await coordinator.flushOnClose();
-  }
-
   logger.dispose();
 }
