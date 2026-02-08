@@ -147,6 +147,9 @@ export class WebGitService implements IGitService {
       );
       this.changeDetector.clearPendingSaves();
       logger.info(`Web committed: ${message} (${newOid})`);
+
+      // Refresh GitHub Repositories extension's view to reflect the new commit
+      await this.refreshVirtualFileSystem();
     } catch (err) {
       // Retry once on HEAD OID mismatch (concurrent edit)
       if (
@@ -167,6 +170,9 @@ export class WebGitService implements IGitService {
         );
         this.changeDetector.clearPendingSaves();
         logger.info(`Web committed (retry): ${message} (${newOid})`);
+
+        // Refresh after retry as well
+        await this.refreshVirtualFileSystem();
       } else {
         throw err;
       }
@@ -186,6 +192,46 @@ export class WebGitService implements IGitService {
   }
 
   // --- Private helpers ---
+
+  /**
+   * Refresh the GitHub Repositories extension's virtual filesystem after a commit.
+   * Tries multiple refresh commands to ensure the UI reflects the new state.
+   */
+  private async refreshVirtualFileSystem(): Promise<void> {
+    const commands = await vscode.commands.getCommands(true);
+
+    // Try remoteHub workspace refresh (most specific)
+    if (commands.includes("remoteHub.views.workspaceRepositories.refresh")) {
+      try {
+        await vscode.commands.executeCommand(
+          "remoteHub.views.workspaceRepositories.refresh",
+        );
+        logger.info("Refreshed remoteHub workspace view");
+      } catch (err) {
+        logger.warn(`remoteHub refresh failed: ${err}`);
+      }
+    }
+
+    // Try git.sync to synchronize local view with remote
+    if (commands.includes("git.sync")) {
+      try {
+        await vscode.commands.executeCommand("git.sync");
+        logger.info("Executed git.sync");
+      } catch (err) {
+        logger.warn(`git.sync failed: ${err}`);
+      }
+    }
+
+    // Try generic SCM refresh as fallback
+    if (commands.includes("git.refresh")) {
+      try {
+        await vscode.commands.executeCommand("git.refresh");
+        logger.info("Refreshed git SCM view");
+      } catch (err) {
+        logger.warn(`git.refresh failed: ${err}`);
+      }
+    }
+  }
 
   private async getAuthToken(): Promise<string> {
     const session = await vscode.authentication.getSession(

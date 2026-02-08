@@ -5,6 +5,17 @@ All notable changes to the "GitNote" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.2]
+
+### Fixed
+
+- github.dev: UI not updating after commit; added automatic refresh commands (`remoteHub.views.workspaceRepositories.refresh`, `git.sync`, `git.refresh`)
+- Sync Now command: added logging when triggered and when no changes are pending (previously silent)
+
+### Added
+
+- github.dev: automatic virtual filesystem refresh after successful commits
+
 ## [0.1.1]
 
 ### Fixed

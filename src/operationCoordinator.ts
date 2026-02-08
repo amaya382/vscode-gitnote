@@ -146,6 +146,7 @@ export class OperationCoordinator implements vscode.Disposable {
   }
 
   async syncNow(): Promise<void> {
+    logger.info("Sync Now triggered");
     if (this.locked) {
       logger.warn("Operation in progress, skipping sync");
       return;
@@ -157,6 +158,13 @@ export class OperationCoordinator implements vscode.Disposable {
     if (this.supportsFullGit) {
       await this.executePull();
     }
+
+    const changes = this.gitService.getMatchingChanges(this.config);
+    if (changes.length === 0) {
+      logger.info("Sync Now: No pending changes to commit");
+      return;
+    }
+
     await this.executeCommitPipeline();
   }
 
