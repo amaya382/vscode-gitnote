@@ -5,6 +5,26 @@ All notable changes to the "GitNote" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.7]
+
+### Fixed
+
+- github.dev: commit no longer shows "Syncing changes may cause conflicts" confirmation dialog; replaced direct GraphQL API calls with `remoteHub.commit` command which properly handles changeStore cleanup
+- github.dev: pull on startup and pull after idle now work in web mode (previously restricted to desktop only)
+
+### Added
+
+- github.dev: file creation tracking via `onDidCreateFiles`
+- github.dev: file rename tracking via `onDidRenameFiles` (treated as delete + create)
+- github.dev: workspace validation on activation — only activates for GitHub repositories (`vscode-vfs://github...`)
+
+### Changed
+
+- github.dev: commit implementation rewritten to use `remoteHub.commit` with `remoteHub.api.getRepositoryContext` instead of direct GitHub GraphQL API, eliminating the need for manual authentication, branch detection, HEAD OID management, and post-commit sync
+- github.dev: branch detection now uses `remoteHub.api.getRepositoryContext` (returns `ref`) instead of custom URI parsing and GraphQL queries
+- Activation event changed from `workspaceContains:.git` to `onStartupFinished` to support github.dev where `.git` directory doesn't exist
+- `gitnote.idleThreshold` minimum value lowered from 60 to 10 seconds
+
 ## [0.1.6]
 
 ### Fixed

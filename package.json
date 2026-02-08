@@ -2,7 +2,7 @@
   "name": "gitnote",
   "displayName": "GitNote",
   "description": "Auto-commit, push, and pull for note-taking repositories",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "amaya382",
   "license": "MIT",
   "repository": {
@@ -32,7 +32,7 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:.git"
+    "onStartupFinished"
   ],
   "extensionKind": [
     "workspace",
@@ -91,7 +91,7 @@
         "gitnote.idleThreshold": {
           "type": "number",
           "default": 300,
-          "minimum": 60,
+          "minimum": 10,
           "description": "Idle threshold in seconds (default: 5 minutes)"
         },
         "gitnote.filePattern": {

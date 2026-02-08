@@ -131,8 +131,8 @@ export class OperationCoordinator implements vscode.Disposable {
     this.setState("watching");
     logger.info("GitNote started");
 
-    // Pull on startup if configured (desktop only)
-    if (this.supportsFullGit && this.config.pullOnStartup) {
+    // Pull on startup if configured
+    if (this.config.pullOnStartup) {
       await this.executePull();
     }
   }
@@ -206,8 +206,8 @@ export class OperationCoordinator implements vscode.Disposable {
       return;
     }
 
-    // Idle detection: if pull after idle is enabled, check if we were idle (desktop only)
-    if (this.supportsFullGit && this.config.pullAfterIdle) {
+    // Idle detection: if pull after idle is enabled, check if we were idle
+    if (this.config.pullAfterIdle) {
       const idleDuration = Date.now() - this.lastActivityTime;
       if (idleDuration >= this.config.idleThreshold) {
         logger.info(

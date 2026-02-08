@@ -9,12 +9,11 @@ import type { WebChangeDetector } from "./webChangeDetector";
 
 /**
  * Web-compatible Git service for github.dev.
- * Uses GitHub GraphQL API (createCommitOnBranch) for committing directly.
- * In github.dev, commit and push are an atomic operation via the API.
+ * Uses remoteHub.commit command for committing, which internally handles
+ * both the GraphQL push and changeStore cleanup.
  */
 export class WebGitService implements IGitService {
   private _branch: string | undefined;
-  private lastCommitOid: string | undefined;
 
   constructor(private readonly changeDetector: WebChangeDetector) {}
 
@@ -84,16 +83,18 @@ export class WebGitService implements IGitService {
       throw new Error("No workspace folder found");
     }
 
-    const token = await this.getAuthToken();
-    const { owner, repo } = this.getRepoInfo();
+    // Get repository context from remoteHub. Returns { uri, ref, name }
+    // where ref is the current branch name.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const repoContext = await vscode.commands.executeCommand<any>(
+      "remoteHub.api.getRepositoryContext",
+      workspaceRoot,
+    );
 
-    // Detect branch (cached after first call)
-    if (!this._branch) {
-      this._branch = await this.detectBranch(token, owner, repo);
-    }
-    const branch = this._branch;
+    const branch = repoContext.ref as string;
+    this._branch = branch;
 
-    // Build commit message early (needed for both strategies)
+    // Build commit message
     const files = changes.map((c) => relativePath(workspaceRoot, c.uri));
     const message = formatCommitMessage(
       config.commitMessageFormat,
@@ -103,92 +104,40 @@ export class WebGitService implements IGitService {
 
     logger.info(`Web commit (${files.length} file(s)): ${files.join(", ")}`);
 
-    // Use GraphQL API for commit
-    logger.info("Using GraphQL API for commit...");
+    // Construct a repository-like object with rootUri and inputBox.
+    // remoteHub.commit reads inputBox.value as the commit message and
+    // internally calls createAndPushCommit + changeStore.acceptAll,
+    // so no separate sync/discard is needed.
+    const repoArg = {
+      ...repoContext,
+      rootUri: workspaceRoot,
+      inputBox: { value: message },
+    };
 
-    // Get current HEAD OID (always fresh to avoid stale OID errors)
-    const headOid = await this.getHeadOid(token, owner, repo, branch);
-
-    // Build file additions and deletions
-    const additions: Array<{ path: string; contents: string }> = [];
-    const deletions: Array<{ path: string }> = [];
-
-    for (const change of changes) {
-      const filePath = relativePath(workspaceRoot, change.uri);
-      // Status.DELETED = 6
-      if ((change.status as number) === 6) {
-        deletions.push({ path: filePath });
-        continue;
-      }
-      try {
-        const content = await vscode.workspace.fs.readFile(change.uri);
-        additions.push({
-          path: filePath,
-          contents: uint8ArrayToBase64(content),
-        });
-      } catch (err) {
-        logger.warn(`Failed to read file ${filePath}, skipping: ${err}`);
-      }
-    }
-
-    if (additions.length === 0 && deletions.length === 0) {
-      logger.info("No file contents to commit");
-      return;
-    }
-
-    try {
-      const newOid = await this.createCommit(
-        token,
-        owner,
-        repo,
-        branch,
-        headOid,
-        message,
-        additions,
-        deletions,
-      );
-      this.lastCommitOid = newOid;
-      this.changeDetector.clearPendingSaves();
-      logger.info(`Web committed via GraphQL: ${message} (${newOid})`);
-
-      // Refresh GitHub Repositories extension's view to reflect the new commit
-      await this.refreshVirtualFileSystem();
-    } catch (err) {
-      // Retry once on HEAD OID mismatch (concurrent edit)
-      if (
-        err instanceof Error &&
-        err.message.includes("expectedHeadOid")
-      ) {
-        logger.warn("Head OID mismatch, retrying with fresh OID");
-        const freshOid = await this.getHeadOid(token, owner, repo, branch);
-        const newOid = await this.createCommit(
-          token,
-          owner,
-          repo,
-          branch,
-          freshOid,
-          message,
-          additions,
-          deletions,
-        );
-        this.lastCommitOid = newOid;
-        this.changeDetector.clearPendingSaves();
-        logger.info(`Web committed (retry): ${message} (${newOid})`);
-
-        // Refresh after retry as well
-        await this.refreshVirtualFileSystem();
-      } else {
-        throw err;
-      }
-    }
+    await vscode.commands.executeCommand("remoteHub.commit", repoArg);
+    logger.info("remoteHub.commit completed successfully");
+    this.changeDetector.clearPendingSaves();
   }
 
   async push(): Promise<void> {
-    // No-op: GraphQL createCommitOnBranch commits directly to remote
+    // No-op: remoteHub.commit pushes directly to remote
   }
 
   async pull(): Promise<void> {
-    // No-op: not supported in web mode
+    const commands = await vscode.commands.getCommands(true);
+
+    if (commands.includes("remoteHub.pull")) {
+      try {
+        logger.info("Executing remoteHub.pull");
+        await vscode.commands.executeCommand("remoteHub.pull");
+        logger.info("remoteHub.pull completed");
+      } catch (err) {
+        logger.warn(`remoteHub.pull failed: ${err}`);
+        throw err;
+      }
+    } else {
+      logger.warn("remoteHub.pull not available in web mode");
+    }
   }
 
   cancelRetry(): void {
@@ -196,225 +145,6 @@ export class WebGitService implements IGitService {
   }
 
   // --- Private helpers ---
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Refresh the GitHub Repositories extension's virtual filesystem after a commit.
-   * Simply executes remoteHub.sync which handles everything.
-   */
-  private async refreshVirtualFileSystem(): Promise<void> {
-    // Clear our own change detector state
-    this.changeDetector.clearPendingSaves();
-
-    // Wait for commit to settle
-    await this.delay(2500);
-
-    const commands = await vscode.commands.getCommands(true);
-
-    // remoteHub.sync is sufficient - no other commands needed
-    if (commands.includes("remoteHub.sync")) {
-      try {
-        logger.info("Executing remoteHub.sync to update UI");
-        await vscode.commands.executeCommand("remoteHub.sync");
-        logger.info("remoteHub.sync completed - UI should be updated");
-      } catch (err) {
-        logger.warn(`remoteHub.sync failed: ${err}`);
-      }
-    } else {
-      logger.warn("remoteHub.sync not available");
-    }
-  }
-
-  private async getAuthToken(): Promise<string> {
-    const session = await vscode.authentication.getSession(
-      "github",
-      ["repo"],
-      { createIfNone: true },
-    );
-    if (!session) {
-      throw new Error(
-        "GitHub authentication required. Please sign in to GitHub.",
-      );
-    }
-    return session.accessToken;
-  }
-
-  private getRepoInfo(): { owner: string; repo: string } {
-    const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-    if (!workspaceUri) {
-      throw new Error("No workspace folder found");
-    }
-
-    // In github.dev, URI is: vscode-vfs://github[+hex]/<owner>/<repo>/...
-    const pathParts = workspaceUri.path.split("/").filter(Boolean);
-    if (pathParts.length < 2) {
-      throw new Error(
-        `Cannot parse repository from workspace URI: ${workspaceUri.toString()}`,
-      );
-    }
-
-    return { owner: pathParts[0], repo: pathParts[1] };
-  }
-
-  private async detectBranch(
-    token: string,
-    owner: string,
-    repo: string,
-  ): Promise<string> {
-    // Try to extract branch from URI authority
-    // In github.dev, non-default branches encode ref info in authority:
-    //   github+<hex-encoded-json> where JSON is {"v":1,"ref":{"type":...,"id":"branch-name"}}
-    const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-    if (workspaceUri) {
-      const authority = workspaceUri.authority;
-      const plusIndex = authority.indexOf("+");
-      if (plusIndex !== -1) {
-        const hex = authority.substring(plusIndex + 1);
-        try {
-          const json = hexToString(hex);
-          const parsed = JSON.parse(json);
-          if (parsed?.ref?.id) {
-            logger.info(`Detected branch from URI: ${parsed.ref.id}`);
-            return parsed.ref.id;
-          }
-        } catch {
-          logger.warn("Failed to parse branch from URI authority");
-        }
-      }
-    }
-
-    // Fallback: query default branch via GitHub API
-    const data = await this.graphqlRequest<{
-      repository: {
-        defaultBranchRef: { name: string };
-      };
-    }>(
-      token,
-      `query($owner: String!, $repo: String!) {
-        repository(owner: $owner, name: $repo) {
-          defaultBranchRef { name }
-        }
-      }`,
-      { owner, repo },
-    );
-
-    const branch = data.repository.defaultBranchRef.name;
-    logger.info(`Using default branch: ${branch}`);
-    return branch;
-  }
-
-  private async getHeadOid(
-    token: string,
-    owner: string,
-    repo: string,
-    branch: string,
-  ): Promise<string> {
-    const data = await this.graphqlRequest<{
-      repository: {
-        ref: { target: { oid: string } } | null;
-      };
-    }>(
-      token,
-      `query($owner: String!, $repo: String!, $ref: String!) {
-        repository(owner: $owner, name: $repo) {
-          ref(qualifiedName: $ref) {
-            target { oid }
-          }
-        }
-      }`,
-      { owner, repo, ref: `refs/heads/${branch}` },
-    );
-
-    if (!data.repository.ref) {
-      throw new Error(`Branch '${branch}' not found in ${owner}/${repo}`);
-    }
-
-    return data.repository.ref.target.oid;
-  }
-
-  private async createCommit(
-    token: string,
-    owner: string,
-    repo: string,
-    branch: string,
-    expectedHeadOid: string,
-    message: string,
-    additions: Array<{ path: string; contents: string }>,
-    deletions: Array<{ path: string }>,
-  ): Promise<string> {
-    const fileChanges: Record<string, unknown> = {};
-    if (additions.length > 0) {
-      fileChanges.additions = additions;
-    }
-    if (deletions.length > 0) {
-      fileChanges.deletions = deletions;
-    }
-
-    const data = await this.graphqlRequest<{
-      createCommitOnBranch: {
-        commit: { oid: string };
-      };
-    }>(
-      token,
-      `mutation($input: CreateCommitOnBranchInput!) {
-        createCommitOnBranch(input: $input) {
-          commit { oid }
-        }
-      }`,
-      {
-        input: {
-          branch: {
-            repositoryNameWithOwner: `${owner}/${repo}`,
-            branchName: branch,
-          },
-          expectedHeadOid,
-          message: { headline: message },
-          fileChanges,
-        },
-      },
-    );
-
-    return data.createCommitOnBranch.commit.oid;
-  }
-
-  private async graphqlRequest<T>(
-    token: string,
-    query: string,
-    variables?: Record<string, unknown>,
-  ): Promise<T> {
-    const response = await fetch("https://api.github.com/graphql", {
-      method: "POST",
-      headers: {
-        Authorization: `bearer ${token}`,
-        "Content-Type": "application/json",
-        "User-Agent": "GitNote-VSCode-Extension",
-      },
-      body: JSON.stringify({ query, variables }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`GitHub API error (${response.status}): ${text}`);
-    }
-
-    const json = (await response.json()) as {
-      data?: T;
-      errors?: Array<{ message: string }>;
-    };
-    if (json.errors && json.errors.length > 0) {
-      throw new Error(
-        `GitHub GraphQL error: ${json.errors.map((e) => e.message).join("; ")}`,
-      );
-    }
-    if (!json.data) {
-      throw new Error("GitHub GraphQL returned no data");
-    }
-
-    return json.data;
-  }
 
   private createChange(
     uri: vscode.Uri,
@@ -428,30 +158,7 @@ export class WebGitService implements IGitService {
     };
   }
 
-
   dispose(): void {
     // No resources to dispose
   }
-}
-
-/** Decode hex string to UTF-8 string (browser-safe) */
-function hexToString(hex: string): string {
-  const bytes: number[] = [];
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes.push(parseInt(hex.substring(i, i + 2), 16));
-  }
-  return new TextDecoder().decode(new Uint8Array(bytes));
-}
-
-/** Base64-encode a Uint8Array (browser-safe, no Buffer needed) */
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    for (let j = 0; j < chunk.length; j++) {
-      binary += String.fromCharCode(chunk[j]);
-    }
-  }
-  return btoa(binary);
 }
