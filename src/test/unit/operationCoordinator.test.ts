@@ -30,6 +30,7 @@ vi.mock("vscode", () => {
       }),
       showWarningMessage: vi.fn(),
       onDidChangeActiveTextEditor: vi.fn(() => ({ dispose: vi.fn() })),
+      onDidChangeWindowState: vi.fn(() => ({ dispose: vi.fn() })),
     },
     workspace: {
       getConfiguration: () => ({
@@ -187,6 +188,7 @@ describe("OperationCoordinator", () => {
       commitMessageFormat: "GitNote: {timestamp}",
       commitOnClose: true,
       conflictBehavior: "pause",
+      showCountdown: true,
     });
 
     await coordinator.start();
@@ -206,6 +208,7 @@ describe("OperationCoordinator", () => {
       commitMessageFormat: "GitNote: {timestamp}",
       commitOnClose: true,
       conflictBehavior: "pause",
+      showCountdown: true,
     });
 
     await coordinator.start();
@@ -225,6 +228,7 @@ describe("OperationCoordinator", () => {
       commitMessageFormat: "GitNote: {timestamp}",
       commitOnClose: true,
       conflictBehavior: "pause",
+      showCountdown: true,
     });
 
     await coordinator.start();
@@ -245,6 +249,7 @@ describe("OperationCoordinator", () => {
       commitMessageFormat: "GitNote: {timestamp}",
       commitOnClose: true,
       conflictBehavior: "pause",
+      showCountdown: true,
     });
 
     await coordinator.start();

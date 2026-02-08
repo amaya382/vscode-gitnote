@@ -38,6 +38,7 @@ export class OperationCoordinator implements vscode.Disposable {
   private locked = false;
   private isOwnCommit = false;
   private lastActivityTime = Date.now();
+  private lastWindowFocusTime = Date.now();
   private config: GitNoteConfig;
   private disposables: vscode.Disposable[] = [];
 
@@ -104,6 +105,13 @@ export class OperationCoordinator implements vscode.Disposable {
         this.lastActivityTime = Date.now();
       }),
     );
+
+    // Track window focus for pull-on-idle
+    this.disposables.push(
+      vscode.window.onDidChangeWindowState((e) => {
+        this.onWindowStateChanged(e);
+      }),
+    );
   }
 
   get currentState(): CoordinatorState {
@@ -132,7 +140,7 @@ export class OperationCoordinator implements vscode.Disposable {
     logger.info("GitNote started");
 
     // Pull on startup if configured
-    if (this.config.pullOnStartup) {
+    if (this.config.pullOnStartup && this.gitService.hasRemote) {
       await this.executePull();
     }
   }
@@ -155,7 +163,7 @@ export class OperationCoordinator implements vscode.Disposable {
     this.debouncedCommit.cancel();
     this.stopCountdown();
 
-    if (this.supportsFullGit) {
+    if (this.gitService.hasRemote) {
       await this.executePull();
     }
 
@@ -199,6 +207,55 @@ export class OperationCoordinator implements vscode.Disposable {
     } finally {
       this.releaseLock();
     }
+  }
+
+  private onWindowStateChanged(e: vscode.WindowState): void {
+    if (!this.config.pullAfterIdle) {
+      return;
+    }
+
+    if (!e.focused) {
+      logger.info("Window lost focus, idle timer started");
+      return;
+    }
+
+    const now = Date.now();
+    const idleDuration = now - this.lastActivityTime;
+    const timeSinceLastFocus = now - this.lastWindowFocusTime;
+
+    this.lastWindowFocusTime = now;
+
+    // Skip if we just regained focus recently (prevent duplicate pulls)
+    const MIN_FOCUS_INTERVAL = 10000; // 10 seconds
+    if (timeSinceLastFocus < MIN_FOCUS_INTERVAL) {
+      return;
+    }
+
+    if (idleDuration >= this.config.idleThreshold) {
+      logger.info(
+        `Window regained focus after ${Math.round(idleDuration / 1000)}s idle, pulling`,
+      );
+      // Reset activity time to prevent onChangeDetected pullAfterIdle from also triggering
+      this.lastActivityTime = Date.now();
+      void this.executePullOnFocus();
+    }
+  }
+
+  private async executePullOnFocus(): Promise<void> {
+    if (this.locked) {
+      return;
+    }
+
+    if (this.state !== "watching" && this.state !== "idle") {
+      logger.info(`Skipping pull-on-focus, current state: ${this.state}`);
+      return;
+    }
+
+    if (!this.gitService.hasRemote) {
+      return;
+    }
+
+    await this.executePull();
   }
 
   private onChangeDetected(): void {
@@ -300,9 +357,6 @@ export class OperationCoordinator implements vscode.Disposable {
   }
 
   private async executePull(): Promise<void> {
-    if (!this.supportsFullGit) {
-      return;
-    }
     if (this.locked) {
       logger.warn("Locked, skipping pull");
       return;

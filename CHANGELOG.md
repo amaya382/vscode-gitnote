@@ -5,6 +5,21 @@ All notable changes to the "GitNote" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.8]
+
+### Fixed
+
+- Pull after idle was not triggering on window focus return — added `onDidChangeWindowState` listener to detect when the window regains focus and pull if idle threshold is exceeded
+- Pull was completely non-functional in web mode (github.dev) — `executePull()` was guarded by `supportsFullGit` which requires a desktop `Repository` object; replaced with `hasRemote` check so web mode can use `remoteHub.pull`
+- Pull on startup was also blocked in web mode by the same `supportsFullGit` guard
+
+### Changed
+
+- `pullAfterIdle` setting now also covers window focus return (previously only triggered on file change detection after idle)
+- Sync Now command now uses `hasRemote` check instead of `supportsFullGit`, enabling pull in web mode
+- Default `commitDelay` changed from 30s to 10s
+- Default `idleThreshold` changed from 300s (5 min) to 30s
+
 ## [0.1.7]
 
 ### Fixed

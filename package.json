@@ -69,7 +69,7 @@
         },
         "gitnote.commitDelay": {
           "type": "number",
-          "default": 30,
+          "default": 10,
           "minimum": 1,
           "description": "Delay in seconds before auto-commit after file save"
         },
@@ -86,13 +86,13 @@
         "gitnote.pullAfterIdle": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically pull on first interaction after idle period"
+          "description": "Automatically pull on window focus or first interaction after idle period"
         },
         "gitnote.idleThreshold": {
           "type": "number",
-          "default": 300,
+          "default": 30,
           "minimum": 10,
-          "description": "Idle threshold in seconds (default: 5 minutes)"
+          "description": "Idle threshold in seconds (default: 30 seconds)"
         },
         "gitnote.filePattern": {
           "type": "string",

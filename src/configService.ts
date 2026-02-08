@@ -32,11 +32,11 @@ export class ConfigService implements vscode.Disposable {
     const cfg = vscode.workspace.getConfiguration("gitnote");
     return {
       enabled: cfg.get<boolean>("enabled", false),
-      commitDelay: cfg.get<number>("commitDelay", 30) * 1000,
+      commitDelay: cfg.get<number>("commitDelay", 10) * 1000,
       autoPush: cfg.get<boolean>("autoPush", true),
       pullOnStartup: cfg.get<boolean>("pullOnStartup", true),
       pullAfterIdle: cfg.get<boolean>("pullAfterIdle", true),
-      idleThreshold: cfg.get<number>("idleThreshold", 300) * 1000,
+      idleThreshold: cfg.get<number>("idleThreshold", 30) * 1000,
       filePattern: cfg.get<string>("filePattern", "**/*"),
       excludeBranches: cfg.get<string[]>("excludeBranches", []),
       commitMessageFormat: cfg.get<string>(

@@ -11,9 +11,9 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 
 ## Features
 
-- **Auto-commit** — Commits changes after file save with configurable delay (default: 30s)
+- **Auto-commit** — Commits changes after file save with configurable delay (default: 10s)
 - **Auto-push** — Pushes to remote after each commit with retry on failure
-- **Auto-pull** — Pulls on startup and after returning from idle (e.g., sleep/resume)
+- **Auto-pull** — Pulls on startup, on window focus return after idle, and on first file change after idle
 - **File filtering** — Target specific files using glob patterns
 - **Branch exclusion** — Skip automation on specific branches
 - **Conflict safety** — Pauses when merge conflicts or rebase are detected
@@ -21,7 +21,7 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 - **Minimal dependencies** — Only `minimatch`; uses VSCode's built-in Git API
 
 > [!NOTE]
-> Pull, conflict detection, rebase detection, branch exclusion, and push retry are not available in github.dev due to platform limitations.
+> Conflict detection, rebase detection, branch exclusion, and push retry are not available in github.dev due to platform limitations.
 
 ### Feature comparison
 
@@ -29,14 +29,13 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 |---------|:---:|:---:|
 | Auto-commit | Yes | Yes |
 | Auto-push | Yes | Yes (atomic with commit) |
-| Auto-pull | Yes | — |
+| Auto-pull (startup) | Yes | Yes |
+| Auto-pull (after idle) | Yes | Yes |
 | Conflict / rebase detection | Yes | — |
-| Idle-after-pull | Yes | — |
 | File filtering | Yes | Yes |
 | Branch exclusion | Yes | — |
 | Commit on close | Yes | Yes |
 | Countdown timer | Yes | Yes |
-| Push retry | Yes | — |
 
 ## Installation
 
@@ -77,11 +76,11 @@ The status bar shows the current state: Watching, Committing, Pushing, Pulling, 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `gitnote.enabled` | `false` | Enable GitNote |
-| `gitnote.commitDelay` | `30` | Delay (seconds) before auto-commit after save |
+| `gitnote.commitDelay` | `10` | Delay (seconds) before auto-commit after save |
 | `gitnote.autoPush` | `true` | Push to remote after commit |
-| `gitnote.pullOnStartup` | `true` | Pull on startup (desktop only) |
-| `gitnote.pullAfterIdle` | `true` | Pull on first interaction after idle (desktop only) |
-| `gitnote.idleThreshold` | `300` | Idle threshold in seconds (desktop only) |
+| `gitnote.pullOnStartup` | `true` | Pull on startup |
+| `gitnote.pullAfterIdle` | `true` | Pull on window focus or first interaction after idle |
+| `gitnote.idleThreshold` | `30` | Idle threshold in seconds |
 | `gitnote.filePattern` | `"**/*"` | Glob pattern for target files |
 | `gitnote.excludeBranches` | `[]` | Branches to exclude (desktop only) |
 | `gitnote.commitMessageFormat` | `"GitNote: {timestamp}"` | Commit message template |
@@ -109,23 +108,23 @@ The status bar shows the current state: Watching, Committing, Pushing, Pulling, 
 ### Desktop
 
 ```
-File save → Debounce (30s) → Safety checks → Commit → Push
+File save → Debounce (10s) → Safety checks → Commit → Push
 ```
 
 - **Change detection** — three layers: file save events, repository state changes, and filesystem watcher (for deletions/renames)
-- **Idle detection** — tracks user activity; if idle for 5 min (configurable), the next save triggers a pull first
+- **Idle detection** — tracks user activity and window focus; if idle for 30s (configurable), regaining window focus or saving a file triggers a pull first
 - **Safety** — mutex-locked operations prevent concurrent git commands; automation pauses during conflicts and rebase; branch checkout cancels pending commits
 - **Push retry** — exponential backoff on failure (30s → 60s → 120s, max 3 attempts)
 
 ### Browser (github.dev)
 
 ```
-File save → Debounce (30s) → Commit (includes push)
+File save → Debounce (10s) → Commit (includes push)
 ```
 
 - **Change detection** — file save events only (`createFileSystemWatcher` is not available in github.dev)
 - **Atomic commit+push** — uses the `remoteHub.commit` command provided by the GitHub Repositories extension; commit and push happen as a single operation
-- **No pull** — auto-pull is not available in github.dev
+- **Auto-pull** — pulls on startup and after idle via `remoteHub.pull` (if available)
 
 ## Development
 
