@@ -127,6 +127,41 @@ File save → Debounce (30s) → Commit (includes push)
 - **Atomic commit+push** — uses the `remoteHub.commit` command provided by the GitHub Repositories extension; commit and push happen as a single operation
 - **No pull** — auto-pull is not available in github.dev
 
+## Development
+
+### Build
+
+```bash
+npm install
+npm run compile
+```
+
+### Test
+
+```bash
+npm run test          # Unit tests
+npm run lint          # Lint
+
+# Test web extension locally in browser
+npx @vscode/test-web --browserType=chromium --extensionDevelopmentPath=./
+```
+
+### Publish
+
+```bash
+# 1. Bump version
+npm version patch  # or minor / major
+
+# 2. Package
+npx @vscode/vsce package
+
+# 3. Publish to VS Marketplace
+npx @vscode/vsce publish
+
+# 4. Publish to Open VSX (optional)
+npx ovsx publish gitnote-*.vsix -p $OVSX_TOKEN
+```
+
 ## Compatibility
 
 Works with standard Git repositories and [baretree](https://github.com/amaya382/baretree) worktree setups. Requires VSCode 1.85.0+.

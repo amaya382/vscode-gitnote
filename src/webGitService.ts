@@ -9,10 +9,12 @@ import type { WebChangeDetector } from "./webChangeDetector";
 
 /**
  * Web-compatible Git service for github.dev.
- * Uses vscode.commands.executeCommand('remoteHub.commit') for committing.
- * In github.dev, commit and push are an atomic operation.
+ * Uses GitHub GraphQL API (createCommitOnBranch) for committing directly.
+ * In github.dev, commit and push are an atomic operation via the API.
  */
 export class WebGitService implements IGitService {
+  private _branch: string | undefined;
+
   constructor(private readonly changeDetector: WebChangeDetector) {}
 
   get hasRemote(): boolean {
@@ -21,8 +23,7 @@ export class WebGitService implements IGitService {
   }
 
   get currentBranch(): string | undefined {
-    // Not available in web mode
-    return undefined;
+    return this._branch;
   }
 
   get hasConflicts(): boolean {
@@ -59,15 +60,72 @@ export class WebGitService implements IGitService {
         }
       }
     }
+    for (const uriStr of this.changeDetector.pendingDeletions) {
+      const uri = vscode.Uri.parse(uriStr);
+      if (config.filePattern === "**/*") {
+        changes.push(this.createChange(uri, 6 as Status)); // DELETED
+      } else {
+        const rel = relativePath(workspaceRoot, uri);
+        if (matchesPattern(rel, config.filePattern)) {
+          changes.push(this.createChange(uri, 6 as Status));
+        }
+      }
+    }
     return changes;
   }
 
-  async stageAndCommit(config: GitNoteConfig, changes: Change[]): Promise<void> {
+  async stageAndCommit(
+    config: GitNoteConfig,
+    changes: Change[],
+  ): Promise<void> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
-    const files = changes.map((c) =>
-      workspaceRoot ? relativePath(workspaceRoot, c.uri) : c.uri.path,
-    );
-    const branch = this.currentBranch ?? "unknown";
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder found");
+    }
+
+    const token = await this.getAuthToken();
+    const { owner, repo } = this.getRepoInfo();
+
+    // Detect branch (cached after first call)
+    if (!this._branch) {
+      this._branch = await this.detectBranch(token, owner, repo);
+    }
+    const branch = this._branch;
+
+    // Get current HEAD OID (always fresh to avoid stale OID errors)
+    const headOid = await this.getHeadOid(token, owner, repo, branch);
+
+    // Build file additions and deletions
+    const additions: Array<{ path: string; contents: string }> = [];
+    const deletions: Array<{ path: string }> = [];
+
+    for (const change of changes) {
+      const filePath = relativePath(workspaceRoot, change.uri);
+      // Status.DELETED = 6
+      if ((change.status as number) === 6) {
+        deletions.push({ path: filePath });
+        continue;
+      }
+      try {
+        const content = await vscode.workspace.fs.readFile(change.uri);
+        additions.push({
+          path: filePath,
+          contents: uint8ArrayToBase64(content),
+        });
+      } catch (err) {
+        logger.warn(`Failed to read file ${filePath}, skipping: ${err}`);
+      }
+    }
+
+    if (additions.length === 0 && deletions.length === 0) {
+      logger.info("No file contents to commit");
+      return;
+    }
+
+    const files = [
+      ...additions.map((a) => a.path),
+      ...deletions.map((d) => `(deleted) ${d.path}`),
+    ];
     const message = formatCommitMessage(
       config.commitMessageFormat,
       branch,
@@ -76,34 +134,47 @@ export class WebGitService implements IGitService {
 
     logger.info(`Web commit (${files.length} file(s)): ${files.join(", ")}`);
 
-    // Set SCM input box message and execute commit
-    // remoteHub.commit commits and pushes atomically in github.dev
-    const commands = await vscode.commands.getCommands(true);
-    if (commands.includes("remoteHub.commit")) {
-      // Try to set the commit message via the SCM input box
-      const gitExt = vscode.extensions.getExtension("vscode.git-base");
-      if (gitExt) {
-        try {
-          const api = gitExt.exports;
-          if (api?.inputBox) {
-            api.inputBox.value = message;
-          }
-        } catch {
-          // Ignore - inputBox may not be available
-        }
-      }
-      await vscode.commands.executeCommand("remoteHub.commit");
-      this.changeDetector.clearPendingSaves();
-      logger.info(`Web committed: ${message}`);
-    } else {
-      throw new Error(
-        "remoteHub.commit command not available. Is this running in github.dev?",
+    try {
+      const newOid = await this.createCommit(
+        token,
+        owner,
+        repo,
+        branch,
+        headOid,
+        message,
+        additions,
+        deletions,
       );
+      this.changeDetector.clearPendingSaves();
+      logger.info(`Web committed: ${message} (${newOid})`);
+    } catch (err) {
+      // Retry once on HEAD OID mismatch (concurrent edit)
+      if (
+        err instanceof Error &&
+        err.message.includes("expectedHeadOid")
+      ) {
+        logger.warn("Head OID mismatch, retrying with fresh OID");
+        const freshOid = await this.getHeadOid(token, owner, repo, branch);
+        const newOid = await this.createCommit(
+          token,
+          owner,
+          repo,
+          branch,
+          freshOid,
+          message,
+          additions,
+          deletions,
+        );
+        this.changeDetector.clearPendingSaves();
+        logger.info(`Web committed (retry): ${message} (${newOid})`);
+      } else {
+        throw err;
+      }
     }
   }
 
   async push(): Promise<void> {
-    // No-op: in github.dev, commit includes push
+    // No-op: GraphQL createCommitOnBranch commits directly to remote
   }
 
   async pull(): Promise<void> {
@@ -114,16 +185,231 @@ export class WebGitService implements IGitService {
     // No-op: no retry mechanism in web mode
   }
 
-  private createChange(uri: vscode.Uri): Change {
+  // --- Private helpers ---
+
+  private async getAuthToken(): Promise<string> {
+    const session = await vscode.authentication.getSession(
+      "github",
+      ["repo"],
+      { createIfNone: true },
+    );
+    if (!session) {
+      throw new Error(
+        "GitHub authentication required. Please sign in to GitHub.",
+      );
+    }
+    return session.accessToken;
+  }
+
+  private getRepoInfo(): { owner: string; repo: string } {
+    const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!workspaceUri) {
+      throw new Error("No workspace folder found");
+    }
+
+    // In github.dev, URI is: vscode-vfs://github[+hex]/<owner>/<repo>/...
+    const pathParts = workspaceUri.path.split("/").filter(Boolean);
+    if (pathParts.length < 2) {
+      throw new Error(
+        `Cannot parse repository from workspace URI: ${workspaceUri.toString()}`,
+      );
+    }
+
+    return { owner: pathParts[0], repo: pathParts[1] };
+  }
+
+  private async detectBranch(
+    token: string,
+    owner: string,
+    repo: string,
+  ): Promise<string> {
+    // Try to extract branch from URI authority
+    // In github.dev, non-default branches encode ref info in authority:
+    //   github+<hex-encoded-json> where JSON is {"v":1,"ref":{"type":...,"id":"branch-name"}}
+    const workspaceUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (workspaceUri) {
+      const authority = workspaceUri.authority;
+      const plusIndex = authority.indexOf("+");
+      if (plusIndex !== -1) {
+        const hex = authority.substring(plusIndex + 1);
+        try {
+          const json = hexToString(hex);
+          const parsed = JSON.parse(json);
+          if (parsed?.ref?.id) {
+            logger.info(`Detected branch from URI: ${parsed.ref.id}`);
+            return parsed.ref.id;
+          }
+        } catch {
+          logger.warn("Failed to parse branch from URI authority");
+        }
+      }
+    }
+
+    // Fallback: query default branch via GitHub API
+    const data = await this.graphqlRequest<{
+      repository: {
+        defaultBranchRef: { name: string };
+      };
+    }>(
+      token,
+      `query($owner: String!, $repo: String!) {
+        repository(owner: $owner, name: $repo) {
+          defaultBranchRef { name }
+        }
+      }`,
+      { owner, repo },
+    );
+
+    const branch = data.repository.defaultBranchRef.name;
+    logger.info(`Using default branch: ${branch}`);
+    return branch;
+  }
+
+  private async getHeadOid(
+    token: string,
+    owner: string,
+    repo: string,
+    branch: string,
+  ): Promise<string> {
+    const data = await this.graphqlRequest<{
+      repository: {
+        ref: { target: { oid: string } } | null;
+      };
+    }>(
+      token,
+      `query($owner: String!, $repo: String!, $ref: String!) {
+        repository(owner: $owner, name: $repo) {
+          ref(qualifiedName: $ref) {
+            target { oid }
+          }
+        }
+      }`,
+      { owner, repo, ref: `refs/heads/${branch}` },
+    );
+
+    if (!data.repository.ref) {
+      throw new Error(`Branch '${branch}' not found in ${owner}/${repo}`);
+    }
+
+    return data.repository.ref.target.oid;
+  }
+
+  private async createCommit(
+    token: string,
+    owner: string,
+    repo: string,
+    branch: string,
+    expectedHeadOid: string,
+    message: string,
+    additions: Array<{ path: string; contents: string }>,
+    deletions: Array<{ path: string }>,
+  ): Promise<string> {
+    const fileChanges: Record<string, unknown> = {};
+    if (additions.length > 0) {
+      fileChanges.additions = additions;
+    }
+    if (deletions.length > 0) {
+      fileChanges.deletions = deletions;
+    }
+
+    const data = await this.graphqlRequest<{
+      createCommitOnBranch: {
+        commit: { oid: string };
+      };
+    }>(
+      token,
+      `mutation($input: CreateCommitOnBranchInput!) {
+        createCommitOnBranch(input: $input) {
+          commit { oid }
+        }
+      }`,
+      {
+        input: {
+          branch: {
+            repositoryNameWithOwner: `${owner}/${repo}`,
+            branchName: branch,
+          },
+          expectedHeadOid,
+          message: { headline: message },
+          fileChanges,
+        },
+      },
+    );
+
+    return data.createCommitOnBranch.commit.oid;
+  }
+
+  private async graphqlRequest<T>(
+    token: string,
+    query: string,
+    variables?: Record<string, unknown>,
+  ): Promise<T> {
+    const response = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: {
+        Authorization: `bearer ${token}`,
+        "Content-Type": "application/json",
+        "User-Agent": "GitNote-VSCode-Extension",
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`GitHub API error (${response.status}): ${text}`);
+    }
+
+    const json = (await response.json()) as {
+      data?: T;
+      errors?: Array<{ message: string }>;
+    };
+    if (json.errors && json.errors.length > 0) {
+      throw new Error(
+        `GitHub GraphQL error: ${json.errors.map((e) => e.message).join("; ")}`,
+      );
+    }
+    if (!json.data) {
+      throw new Error("GitHub GraphQL returned no data");
+    }
+
+    return json.data;
+  }
+
+  private createChange(
+    uri: vscode.Uri,
+    status: Status = 5 as Status,
+  ): Change {
     return {
       uri,
       originalUri: uri,
       renameUri: undefined,
-      status: 5 as Status, // Status.MODIFIED
+      status, // Status.MODIFIED = 5, Status.DELETED = 6
     };
   }
 
   dispose(): void {
     // No resources to dispose
   }
+}
+
+/** Decode hex string to UTF-8 string (browser-safe) */
+function hexToString(hex: string): string {
+  const bytes: number[] = [];
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes.push(parseInt(hex.substring(i, i + 2), 16));
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
+/** Base64-encode a Uint8Array (browser-safe, no Buffer needed) */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+  }
+  return btoa(binary);
 }

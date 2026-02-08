@@ -15,6 +15,8 @@ export class WebChangeDetector implements IChangeDetector {
   private readonly workspaceRoot: vscode.Uri | undefined;
   /** URIs of files saved since last commit, used by WebGitService */
   readonly pendingSaves: Set<string> = new Set();
+  /** URIs of files deleted since last commit, used by WebGitService */
+  readonly pendingDeletions: Set<string> = new Set();
 
   constructor(private filePattern: string) {
     const folders = vscode.workspace.workspaceFolders;
@@ -32,10 +34,27 @@ export class WebChangeDetector implements IChangeDetector {
         }
       }),
     );
+
+    this.disposables.push(
+      vscode.workspace.onDidDeleteFiles((e) => {
+        for (const uri of e.files) {
+          if (this.isRelevantFile(uri)) {
+            const rel = this.workspaceRoot
+              ? relativePath(this.workspaceRoot, uri)
+              : uri.path;
+            logger.info(`File deleted: ${rel}`);
+            this.pendingDeletions.add(uri.toString());
+            this.pendingSaves.delete(uri.toString());
+            this._onDidDetectChange.fire();
+          }
+        }
+      }),
+    );
   }
 
   clearPendingSaves(): void {
     this.pendingSaves.clear();
+    this.pendingDeletions.clear();
   }
 
   updateFilePattern(pattern: string): void {

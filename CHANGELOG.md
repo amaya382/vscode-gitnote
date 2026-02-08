@@ -5,6 +5,18 @@ All notable changes to the "GitNote" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1]
+
+### Fixed
+
+- github.dev: commits were silently failing due to `remoteHub.commit` not receiving a commit message; replaced with direct GitHub GraphQL API (`createCommitOnBranch` mutation)
+
+### Added
+
+- github.dev: branch detection from workspace URI (supports non-default branches)
+- github.dev: file deletion tracking via `onDidDeleteFiles`
+- Development section in README (build, test, publish instructions)
+
 ## [0.1.0] - 2026-02-07
 
 ### Added
