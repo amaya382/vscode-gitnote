@@ -14,6 +14,7 @@ import type { WebChangeDetector } from "./webChangeDetector";
  */
 export class WebGitService implements IGitService {
   private _branch: string | undefined;
+  private lastCommitOid: string | undefined;
 
   constructor(private readonly changeDetector: WebChangeDetector) {}
 
@@ -145,11 +146,15 @@ export class WebGitService implements IGitService {
         additions,
         deletions,
       );
+      this.lastCommitOid = newOid;
       this.changeDetector.clearPendingSaves();
       logger.info(`Web committed: ${message} (${newOid})`);
 
       // Refresh GitHub Repositories extension's view to reflect the new commit
       await this.refreshVirtualFileSystem();
+
+      // Verify commit sync (optional)
+      await this.verifyCommitSync(newOid);
     } catch (err) {
       // Retry once on HEAD OID mismatch (concurrent edit)
       if (
@@ -168,11 +173,15 @@ export class WebGitService implements IGitService {
           additions,
           deletions,
         );
+        this.lastCommitOid = newOid;
         this.changeDetector.clearPendingSaves();
         logger.info(`Web committed (retry): ${message} (${newOid})`);
 
         // Refresh after retry as well
         await this.refreshVirtualFileSystem();
+
+        // Verify commit sync (optional)
+        await this.verifyCommitSync(newOid);
       } else {
         throw err;
       }
@@ -194,25 +203,110 @@ export class WebGitService implements IGitService {
   // --- Private helpers ---
 
   /**
+   * Clear the SCM input box after commit by executing the clear command.
+   * Note: Direct access to SCM provider input box may not be available in all VSCode versions.
+   */
+  private async clearCommitInput(): Promise<void> {
+    try {
+      // Try to clear the input box via command if available
+      const commands = await vscode.commands.getCommands(true);
+      if (commands.includes("git.inputBox.clear")) {
+        await vscode.commands.executeCommand("git.inputBox.clear");
+        logger.info("Cleared SCM input box via command");
+      }
+    } catch (err) {
+      // Fallback: input box clearing is not critical, just log
+      logger.info(`SCM input box clear not available: ${err}`);
+    }
+  }
+
+  /**
+   * Delay utility for waiting between refresh commands.
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Verify that the commit is reflected in the UI.
+   * Returns true if the HEAD OID matches the expected OID.
+   */
+  private async verifyCommitSync(expectedOid: string): Promise<boolean> {
+    // Wait for UI to refresh
+    await this.delay(1000);
+
+    try {
+      const token = await this.getAuthToken();
+      const { owner, repo } = this.getRepoInfo();
+      const currentHeadOid = await this.getHeadOid(
+        token,
+        owner,
+        repo,
+        this._branch!,
+      );
+
+      if (currentHeadOid === expectedOid) {
+        logger.info("Commit sync verified: UI should be up to date");
+        return true;
+      } else {
+        logger.warn(
+          `Commit sync mismatch: expected ${expectedOid}, got ${currentHeadOid}`,
+        );
+        return false;
+      }
+    } catch (err) {
+      logger.info(`Commit verification failed: ${err}`);
+      return false;
+    }
+  }
+
+  /**
    * Refresh the GitHub Repositories extension's virtual filesystem after a commit.
-   * Tries multiple refresh commands to ensure the UI reflects the new state.
+   * Tries multiple refresh commands with appropriate delays to ensure the UI reflects the new state.
+   * Note: Due to VSCode API limitations, complete decoration updates are not guaranteed.
    */
   private async refreshVirtualFileSystem(): Promise<void> {
     const commands = await vscode.commands.getCommands(true);
 
-    // Try remoteHub workspace refresh (most specific)
+    // Step 1: Clear SCM Input Box
+    await this.clearCommitInput();
+
+    // Step 2: Sync remote state (git fetch)
+    if (commands.includes("git.fetch")) {
+      try {
+        await vscode.commands.executeCommand("git.fetch");
+        logger.info("Executed git.fetch to sync remote state");
+        await this.delay(500);
+      } catch (err) {
+        logger.warn(`git.fetch failed: ${err}`);
+      }
+    }
+
+    // Step 3: Refresh RemoteHub Workspace View
     if (commands.includes("remoteHub.views.workspaceRepositories.refresh")) {
       try {
         await vscode.commands.executeCommand(
           "remoteHub.views.workspaceRepositories.refresh",
         );
         logger.info("Refreshed remoteHub workspace view");
+        await this.delay(300);
       } catch (err) {
         logger.warn(`remoteHub refresh failed: ${err}`);
       }
     }
 
-    // Try git.sync to synchronize local view with remote
+    // Step 4: Refresh Git SCM View
+    if (commands.includes("git.refresh")) {
+      try {
+        await vscode.commands.executeCommand("git.refresh");
+        logger.info("Refreshed git SCM view");
+        await this.delay(200);
+      } catch (err) {
+        logger.warn(`git.refresh failed: ${err}`);
+      }
+    }
+
+    // Step 5: Execute Git Sync (pull + push check)
     if (commands.includes("git.sync")) {
       try {
         await vscode.commands.executeCommand("git.sync");
@@ -222,13 +316,13 @@ export class WebGitService implements IGitService {
       }
     }
 
-    // Try generic SCM refresh as fallback
-    if (commands.includes("git.refresh")) {
+    // Step 6: Focus SCM View to trigger UI refresh
+    if (commands.includes("workbench.view.scm")) {
       try {
-        await vscode.commands.executeCommand("git.refresh");
-        logger.info("Refreshed git SCM view");
+        await vscode.commands.executeCommand("workbench.view.scm");
+        logger.info("Focused SCM view to trigger UI refresh");
       } catch (err) {
-        logger.warn(`git.refresh failed: ${err}`);
+        logger.info(`SCM focus failed: ${err}`);
       }
     }
   }

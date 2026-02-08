@@ -5,6 +5,29 @@ All notable changes to the "GitNote" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.3]
+
+### Fixed
+
+- github.dev: improved UI refresh timing with optimized command sequencing and strategic delays (500ms after git.fetch, 300ms after remoteHub refresh, 200ms after git.refresh)
+- github.dev: added `git.fetch` command before other refresh operations to ensure remote state synchronization
+- github.dev: added SCM view focus (`workbench.view.scm`) to trigger UI decoration updates
+
+### Added
+
+- github.dev: commit verification mechanism that confirms HEAD OID matches the committed OID
+- github.dev: SCM input box clearing after successful commits (when available)
+- github.dev: enhanced logging for all refresh operations with clear step-by-step progress
+
+### Changed
+
+- github.dev: refresh command execution now uses sequential timing with delays instead of parallel execution to allow VSCode's internal caches to update properly
+
+### Technical Notes
+
+- Due to VSCode API limitations in github.dev (web environment), complete file decoration updates cannot be guaranteed. The current implementation represents the optimal approach using publicly available APIs.
+- Multiple independent cache layers (TextDocument, FileSystemProvider, SCM Provider, Decorations) exist in VSCode without public invalidation APIs.
+
 ## [0.1.2]
 
 ### Fixed
