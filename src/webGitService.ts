@@ -123,6 +123,27 @@ export class WebGitService implements IGitService {
     // No-op: remoteHub.commit pushes directly to remote
   }
 
+  async fetchBranch(): Promise<void> {
+    if (this._branch) {
+      return;
+    }
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!workspaceRoot) {
+      return;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const repoContext = await vscode.commands.executeCommand<any>(
+        "remoteHub.api.getRepositoryContext",
+        workspaceRoot,
+      );
+      this._branch = repoContext.ref as string;
+      logger.info(`Branch detected: ${this._branch}`);
+    } catch (err) {
+      logger.warn(`Failed to fetch branch: ${err}`);
+    }
+  }
+
   async pull(): Promise<void> {
     const commands = await vscode.commands.getCommands(true);
 

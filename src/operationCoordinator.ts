@@ -128,7 +128,8 @@ export class OperationCoordinator implements vscode.Disposable {
       return;
     }
 
-    if (this.supportsFullGit && this.isBranchExcluded()) {
+    await this.gitService.fetchBranch();
+    if (this.isBranchExcluded()) {
       logger.info(
         `Branch '${this.gitService.currentBranch}' is excluded, pausing`,
       );
@@ -406,9 +407,6 @@ export class OperationCoordinator implements vscode.Disposable {
   }
 
   private isBranchExcluded(): boolean {
-    if (!this.supportsFullGit) {
-      return false;
-    }
     const branch = this.gitService.currentBranch;
     if (!branch) {
       return false;

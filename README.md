@@ -20,9 +20,6 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 - **Commit on close** — Saves pending changes when VSCode closes
 - **Minimal dependencies** — Only `minimatch`; uses VSCode's built-in Git API
 
-> [!NOTE]
-> Conflict detection, rebase detection, branch exclusion, and push retry are not available in github.dev due to platform limitations.
-
 ### Feature comparison
 
 | Feature | Desktop | github.dev |
@@ -33,7 +30,7 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 | Auto-pull (after idle) | Yes | Yes |
 | Conflict / rebase detection | Yes | — |
 | File filtering | Yes | Yes |
-| Branch exclusion | Yes | — |
+| Branch exclusion | Yes | Yes |
 | Commit on close | Yes | Yes |
 | Countdown timer | Yes | Yes |
 
@@ -82,7 +79,7 @@ The status bar shows the current state: Watching, Committing, Pushing, Pulling, 
 | `gitnote.pullAfterIdle` | `true` | Pull on window focus or first interaction after idle |
 | `gitnote.idleThreshold` | `30` | Idle threshold in seconds |
 | `gitnote.filePattern` | `"**/*"` | Glob pattern for target files |
-| `gitnote.excludeBranches` | `[]` | Branches to exclude (desktop only) |
+| `gitnote.excludeBranches` | `[]` | Branches to exclude |
 | `gitnote.commitMessageFormat` | `"GitNote: {timestamp}"` | Commit message template |
 | `gitnote.commitOnClose` | `true` | Commit pending changes on close |
 | `gitnote.showCountdown` | `true` | Show countdown timer in status bar |

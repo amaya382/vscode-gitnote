@@ -93,6 +93,7 @@ function createMockGitService(): IGitService {
     push: vi.fn().mockResolvedValue(undefined),
     pull: vi.fn().mockResolvedValue(undefined),
     cancelRetry: vi.fn(),
+    fetchBranch: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn(),
   };
 }

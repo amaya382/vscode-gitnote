@@ -146,6 +146,10 @@ export class DesktopGitService implements IGitService {
     }
   }
 
+  async fetchBranch(): Promise<void> {
+    // No-op: desktop branch is always available via repository.state.HEAD
+  }
+
   cancelRetry(): void {
     if (this.retryTimer !== undefined) {
       clearTimeout(this.retryTimer);
