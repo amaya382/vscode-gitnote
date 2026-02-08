@@ -5,6 +5,12 @@ All notable changes to the "GitNote" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.6]
+
+### Fixed
+
+- github.dev: UI refresh after commit now works reliably by using `remoteHub.sync` command
+
 ## [0.1.5]
 
 ### Fixed
