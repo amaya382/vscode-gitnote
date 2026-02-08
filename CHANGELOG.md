@@ -5,27 +5,52 @@ All notable changes to the "GitNote" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.5]
+
+### Fixed
+
+- github.dev: increased delays after RemoteHub refresh commands (800ms after workspace refresh, 500ms after general refresh) to allow more time for cache updates
+- github.dev: removed `workbench.action.files.revert` strategy as it was reverting file contents instead of refreshing decorations
+
+### Added
+
+- github.dev: automatic close and reopen of active editor after commit to force TextDocument cache invalidation
+- github.dev: extended delay (500ms) after final SCM focus to allow UI to settle
+
+### Changed
+
+- github.dev: reordered refresh strategies to prioritize RemoteHub commands over git commands (which are not available in github.dev)
+
 ## [0.1.3]
 
 ### Fixed
 
-- github.dev: improved UI refresh timing with optimized command sequencing and strategic delays (500ms after git.fetch, 300ms after remoteHub refresh, 200ms after git.refresh)
-- github.dev: added `git.fetch` command before other refresh operations to ensure remote state synchronization
-- github.dev: added SCM view focus (`workbench.view.scm`) to trigger UI decoration updates
+- github.dev: improved UI refresh with multiple fallback strategies to maximize update success rate
+- github.dev: added comprehensive logging to identify which refresh commands are available and executed
 
 ### Added
 
-- github.dev: commit verification mechanism that confirms HEAD OID matches the committed OID
-- github.dev: SCM input box clearing after successful commits (when available)
-- github.dev: enhanced logging for all refresh operations with clear step-by-step progress
+- github.dev: commit verification mechanism that confirms HEAD OID matches the committed OID after commit
+- github.dev: multiple refresh strategies tried sequentially with appropriate delays:
+  - `remoteHub.views.workspaceRepositories.refresh` (500ms delay)
+  - `workbench.scm.focus` (200ms delay)
+  - `git.refresh` (300ms delay)
+  - `git.sync` (200ms delay)
+  - `git.fetch` (200ms delay)
+  - `remoteHub.refresh` (200ms delay)
+  - `workbench.action.files.revert` (100ms delay)
+- github.dev: diagnostic logging of available refresh commands to aid troubleshooting
+- github.dev: SCM input box clearing after successful commits (when command is available)
 
 ### Changed
 
-- github.dev: refresh command execution now uses sequential timing with delays instead of parallel execution to allow VSCode's internal caches to update properly
+- github.dev: refresh command execution now tries multiple strategies with fallback support
+- github.dev: improved logging granularity - each refresh command logs its execution status
 
 ### Technical Notes
 
-- Due to VSCode API limitations in github.dev (web environment), complete file decoration updates cannot be guaranteed. The current implementation represents the optimal approach using publicly available APIs.
+- Due to VSCode API limitations in github.dev (web environment), complete file decoration updates cannot be guaranteed. The current implementation tries multiple refresh strategies to maximize success rate.
+- Not all VSCode commands are available in github.dev. The extension logs which commands are available and actually executed.
 - Multiple independent cache layers (TextDocument, FileSystemProvider, SCM Provider, Decorations) exist in VSCode without public invalidation APIs.
 
 ## [0.1.2]

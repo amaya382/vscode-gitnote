@@ -268,62 +268,80 @@ export class WebGitService implements IGitService {
   private async refreshVirtualFileSystem(): Promise<void> {
     const commands = await vscode.commands.getCommands(true);
 
+    // Log available refresh-related commands for debugging
+    const relevantCommands = commands.filter(
+      (cmd) =>
+        cmd.includes("git") ||
+        cmd.includes("scm") ||
+        cmd.includes("remoteHub") ||
+        cmd.includes("github"),
+    );
+    logger.info(
+      `Available refresh commands: ${relevantCommands.slice(0, 20).join(", ")}...`,
+    );
+
     // Step 1: Clear SCM Input Box
     await this.clearCommitInput();
 
-    // Step 2: Sync remote state (git fetch)
-    if (commands.includes("git.fetch")) {
-      try {
-        await vscode.commands.executeCommand("git.fetch");
-        logger.info("Executed git.fetch to sync remote state");
-        await this.delay(500);
-      } catch (err) {
-        logger.warn(`git.fetch failed: ${err}`);
+    // Step 2: Try various refresh strategies
+    const refreshStrategies = [
+      // Strategy 1: RemoteHub workspace refresh (highest priority)
+      {
+        name: "remoteHub.views.workspaceRepositories.refresh",
+        delay: 800,
+      },
+      // Strategy 2: RemoteHub general refresh
+      { name: "remoteHub.refresh", delay: 500 },
+      // Strategy 3: Focus SCM to trigger UI update
+      { name: "workbench.scm.focus", delay: 300 },
+      // Strategy 4: Try git commands (may not be available in github.dev)
+      { name: "git.refresh", delay: 300 },
+      { name: "git.sync", delay: 200 },
+      { name: "git.fetch", delay: 200 },
+    ];
+
+    for (const strategy of refreshStrategies) {
+      if (commands.includes(strategy.name)) {
+        try {
+          await vscode.commands.executeCommand(strategy.name);
+          logger.info(`Executed: ${strategy.name}`);
+          await this.delay(strategy.delay);
+        } catch (err) {
+          logger.info(`${strategy.name} failed: ${err}`);
+        }
       }
     }
 
-    // Step 3: Refresh RemoteHub Workspace View
-    if (commands.includes("remoteHub.views.workspaceRepositories.refresh")) {
-      try {
+    // Step 3: Final attempt - focus SCM view and trigger refresh
+    try {
+      await vscode.commands.executeCommand("workbench.view.scm");
+      logger.info("Focused SCM view");
+      await this.delay(500);
+    } catch (err) {
+      logger.info(`SCM focus failed: ${err}`);
+    }
+
+    // Step 4: Try to close and reopen edited files to force cache invalidation
+    try {
+      const activeEditor = vscode.window.activeTextEditor;
+      if (activeEditor) {
+        const documentUri = activeEditor.document.uri;
+        const viewColumn = activeEditor.viewColumn;
+
+        // Close the active editor
         await vscode.commands.executeCommand(
-          "remoteHub.views.workspaceRepositories.refresh",
+          "workbench.action.closeActiveEditor",
         );
-        logger.info("Refreshed remoteHub workspace view");
-        await this.delay(300);
-      } catch (err) {
-        logger.warn(`remoteHub refresh failed: ${err}`);
-      }
-    }
-
-    // Step 4: Refresh Git SCM View
-    if (commands.includes("git.refresh")) {
-      try {
-        await vscode.commands.executeCommand("git.refresh");
-        logger.info("Refreshed git SCM view");
+        logger.info("Closed active editor");
         await this.delay(200);
-      } catch (err) {
-        logger.warn(`git.refresh failed: ${err}`);
-      }
-    }
 
-    // Step 5: Execute Git Sync (pull + push check)
-    if (commands.includes("git.sync")) {
-      try {
-        await vscode.commands.executeCommand("git.sync");
-        logger.info("Executed git.sync");
-      } catch (err) {
-        logger.warn(`git.sync failed: ${err}`);
+        // Reopen the document
+        const document = await vscode.workspace.openTextDocument(documentUri);
+        await vscode.window.showTextDocument(document, viewColumn);
+        logger.info("Reopened document to refresh cache");
       }
-    }
-
-    // Step 6: Focus SCM View to trigger UI refresh
-    if (commands.includes("workbench.view.scm")) {
-      try {
-        await vscode.commands.executeCommand("workbench.view.scm");
-        logger.info("Focused SCM view to trigger UI refresh");
-      } catch (err) {
-        logger.info(`SCM focus failed: ${err}`);
-      }
+    } catch (err) {
+      logger.info(`Editor reopen failed: ${err}`);
     }
   }
 
