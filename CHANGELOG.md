@@ -5,13 +5,15 @@ All notable changes to the "GitNote" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.1.8]
+## [0.2.0]
 
 ### Fixed
 
 - Pull after idle was not triggering on window focus return — added `onDidChangeWindowState` listener to detect when the window regains focus and pull if idle threshold is exceeded
 - Pull was completely non-functional in web mode (github.dev) — `executePull()` was guarded by `supportsFullGit` which requires a desktop `Repository` object; replaced with `hasRemote` check so web mode can use `remoteHub.pull`
 - Pull on startup was also blocked in web mode by the same `supportsFullGit` guard
+- Branch exclusion was not working in web mode — `isBranchExcluded()` was guarded by `supportsFullGit`; removed guard and added `fetchBranch()` to resolve branch name on startup via `remoteHub.api.getRepositoryContext`
+- Commit on close was unreliable — VSCode's `deactivate` has a ~5s timeout making async git operations fail silently; replaced with flush on window focus loss (`onDidChangeWindowState`) which commits and pushes pending changes immediately when the window loses focus
 
 ### Changed
 

@@ -2,7 +2,7 @@
   "name": "gitnote",
   "displayName": "GitNote",
   "description": "Auto-commit, push, and pull for note-taking repositories",
-  "version": "0.1.7",
+  "version": "0.2.0",
   "publisher": "amaya382",
   "license": "MIT",
   "repository": {
