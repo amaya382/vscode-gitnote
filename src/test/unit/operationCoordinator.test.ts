@@ -187,7 +187,7 @@ describe("OperationCoordinator", () => {
       filePattern: "**/*",
       excludeBranches: [],
       commitMessageFormat: "GitNote: {timestamp}",
-      commitOnClose: true,
+      commitOnFocusLost: true,
       conflictBehavior: "pause",
       showCountdown: true,
     });
@@ -207,7 +207,7 @@ describe("OperationCoordinator", () => {
       filePattern: "**/*",
       excludeBranches: [],
       commitMessageFormat: "GitNote: {timestamp}",
-      commitOnClose: true,
+      commitOnFocusLost: true,
       conflictBehavior: "pause",
       showCountdown: true,
     });
@@ -227,7 +227,7 @@ describe("OperationCoordinator", () => {
       filePattern: "**/*",
       excludeBranches: [],
       commitMessageFormat: "GitNote: {timestamp}",
-      commitOnClose: true,
+      commitOnFocusLost: true,
       conflictBehavior: "pause",
       showCountdown: true,
     });
@@ -248,7 +248,7 @@ describe("OperationCoordinator", () => {
       filePattern: "**/*",
       excludeBranches: ["main"],
       commitMessageFormat: "GitNote: {timestamp}",
-      commitOnClose: true,
+      commitOnFocusLost: true,
       conflictBehavior: "pause",
       showCountdown: true,
     });

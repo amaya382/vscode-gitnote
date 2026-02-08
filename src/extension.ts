@@ -219,12 +219,7 @@ function connectStatusBar(context: vscode.ExtensionContext): void {
   );
 }
 
-export async function deactivate(): Promise<void> {
+export function deactivate(): void {
   logger.info("GitNote deactivating...");
-
-  if (coordinator) {
-    await coordinator.flushOnClose();
-  }
-
   logger.dispose();
 }

@@ -112,10 +112,10 @@
           "default": "GitNote: {timestamp}",
           "description": "Commit message format. Variables: {timestamp}, {date}, {time}, {branch}, {files}, {count}"
         },
-        "gitnote.commitOnClose": {
+        "gitnote.commitOnFocusLost": {
           "type": "boolean",
           "default": true,
-          "description": "Commit pending changes when VSCode closes"
+          "description": "Commit and push pending changes when the window loses focus"
         },
         "gitnote.showCountdown": {
           "type": "boolean",

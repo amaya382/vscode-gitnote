@@ -10,7 +10,7 @@ export interface GitNoteConfig {
   filePattern: string;
   excludeBranches: string[];
   commitMessageFormat: string;
-  commitOnClose: boolean;
+  commitOnFocusLost: boolean;
   showCountdown: boolean;
   conflictBehavior: "pause" | "notify";
 }
@@ -43,7 +43,7 @@ export class ConfigService implements vscode.Disposable {
         "commitMessageFormat",
         "GitNote: {timestamp}",
       ),
-      commitOnClose: cfg.get<boolean>("commitOnClose", true),
+      commitOnFocusLost: cfg.get<boolean>("commitOnFocusLost", true),
       showCountdown: cfg.get<boolean>("showCountdown", true),
       conflictBehavior: cfg.get<"pause" | "notify">("conflictBehavior", "pause"),
     };

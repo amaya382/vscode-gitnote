@@ -177,46 +177,17 @@ export class OperationCoordinator implements vscode.Disposable {
     await this.executeCommitPipeline();
   }
 
-  async flushOnClose(): Promise<void> {
-    if (!this.config.enabled || !this.config.commitOnClose) {
-      return;
-    }
-
-    // Cancel debounce and commit immediately
-    this.debouncedCommit.cancel();
-
-    const changes = this.gitService.getMatchingChanges(this.config);
-    if (changes.length === 0) {
-      return;
-    }
-
-    logger.info("Committing pending changes on close");
-    try {
-      await this.acquireLock();
-      this.isOwnCommit = true;
-      await this.gitService.stageAndCommit(this.config, changes);
-      // Best-effort push on close
-      if (this.config.autoPush) {
-        try {
-          await this.gitService.push();
-        } catch {
-          logger.warn("Push on close failed (best-effort)");
-        }
-      }
-    } catch (err) {
-      logger.error("Commit on close failed", err);
-    } finally {
-      this.releaseLock();
-    }
-  }
-
   private onWindowStateChanged(e: vscode.WindowState): void {
-    if (!this.config.pullAfterIdle) {
-      return;
-    }
-
     if (!e.focused) {
       logger.info("Window lost focus, idle timer started");
+      // Flush pending changes immediately on focus loss
+      if (this.config.enabled && this.config.commitOnFocusLost) {
+        void this.flushOnFocusLost();
+      }
+      return;
+    }
+
+    if (!this.config.pullAfterIdle) {
       return;
     }
 
@@ -239,6 +210,48 @@ export class OperationCoordinator implements vscode.Disposable {
       // Reset activity time to prevent onChangeDetected pullAfterIdle from also triggering
       this.lastActivityTime = Date.now();
       void this.executePullOnFocus();
+    }
+  }
+
+  private async flushOnFocusLost(): Promise<void> {
+    this.debouncedCommit.cancel();
+    this.stopCountdown();
+
+    const changes = this.gitService.getMatchingChanges(this.config);
+    if (changes.length === 0) {
+      return;
+    }
+
+    if (this.locked) {
+      logger.info("flushOnFocusLost: locked, skipping");
+      return;
+    }
+
+    logger.info(`flushOnFocusLost: committing ${changes.length} pending change(s)`);
+    try {
+      await this.acquireLock();
+      this.setState("committing");
+
+      this.isOwnCommit = true;
+      await this.gitService.stageAndCommit(this.config, changes);
+      logger.info("flushOnFocusLost: commit succeeded");
+
+      if (this.config.autoPush) {
+        this.setState("pushing");
+        await this.gitService.push();
+      }
+
+      this.setState("watching");
+    } catch (err) {
+      logger.error("flushOnFocusLost failed", err);
+      this.setState("error");
+      setTimeout(() => {
+        if (this.state === "error") {
+          this.setState("watching");
+        }
+      }, 5000);
+    } finally {
+      this.releaseLock();
     }
   }
 

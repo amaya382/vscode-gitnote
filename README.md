@@ -17,7 +17,7 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 - **File filtering** — Target specific files using glob patterns
 - **Branch exclusion** — Skip automation on specific branches
 - **Conflict safety** — Pauses when merge conflicts or rebase are detected
-- **Commit on close** — Saves pending changes when VSCode closes
+- **Commit on focus loss** — Commits and pushes pending changes when the window loses focus
 - **Minimal dependencies** — Only `minimatch`; uses VSCode's built-in Git API
 
 ### Feature comparison
@@ -31,7 +31,7 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 | Conflict / rebase detection | Yes | — |
 | File filtering | Yes | Yes |
 | Branch exclusion | Yes | Yes |
-| Commit on close | Yes | Yes |
+| Commit on focus loss | Yes | Yes |
 | Countdown timer | Yes | Yes |
 
 ## Installation
@@ -81,7 +81,7 @@ The status bar shows the current state: Watching, Committing, Pushing, Pulling, 
 | `gitnote.filePattern` | `"**/*"` | Glob pattern for target files |
 | `gitnote.excludeBranches` | `[]` | Branches to exclude |
 | `gitnote.commitMessageFormat` | `"GitNote: {timestamp}"` | Commit message template |
-| `gitnote.commitOnClose` | `true` | Commit pending changes on close |
+| `gitnote.commitOnFocusLost` | `true` | Commit and push pending changes on window focus loss |
 | `gitnote.showCountdown` | `true` | Show countdown timer in status bar |
 | `gitnote.conflictBehavior` | `"pause"` | `"pause"` or `"notify"` on conflicts (desktop only) |
 
