@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=amaya382.gitnote"><img src="https://img.shields.io/visual-studio-marketplace/v/amaya382.gitnote" alt="VS Marketplace Version"></a>
-  <a href="https://github.com/amaya382/gitnote/blob/main/LICENSE"><img src="https://img.shields.io/github/license/amaya382/gitnote" alt="License"></a>
+  <a href="https://github.com/amaya382/vscode-gitnote/blob/main/LICENSE"><img src="https://img.shields.io/github/license/amaya382/vscode-gitnote" alt="License"></a>
 </p>
 
 A simple, stable VSCode extension that keeps your notes in sync with Git. Automatically commits, pushes, and pulls — so you can focus on writing.
@@ -22,17 +22,17 @@ Works on both **desktop VSCode** and **github.dev** (browser).
 
 ### Feature comparison
 
-| Feature | Desktop | github.dev |
-|---------|:---:|:---:|
-| Auto-commit | Yes | Yes |
-| Auto-push | Yes | Yes (atomic with commit) |
-| Auto-pull (startup) | Yes | Yes |
-| Auto-pull (after idle) | Yes | Yes |
-| Conflict / rebase detection | Yes | — |
-| File filtering | Yes | Yes |
-| Branch exclusion | Yes | Yes |
-| Commit on focus loss | Yes | Yes |
-| Countdown timer | Yes | Yes |
+| Feature                     | Desktop |        github.dev        |
+| --------------------------- | :-----: | :----------------------: |
+| Auto-commit                 |   Yes   |           Yes            |
+| Auto-push                   |   Yes   | Yes (atomic with commit) |
+| Auto-pull (startup)         |   Yes   |           Yes            |
+| Auto-pull (after idle)      |   Yes   |           Yes            |
+| Conflict / rebase detection |   Yes   |            —             |
+| File filtering              |   Yes   |           Yes            |
+| Branch exclusion            |   Yes   |           Yes            |
+| Commit on focus loss        |   Yes   |           Yes            |
+| Countdown timer             |   Yes   |           Yes            |
 
 ## Installation
 
@@ -43,8 +43,8 @@ Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.co
 ### From source
 
 ```bash
-git clone https://github.com/amaya382/gitnote.git
-cd gitnote
+git clone https://github.com/amaya382/vscode-gitnote.git
+cd vscode-gitnote
 npm install
 npm run compile
 ```
@@ -61,29 +61,29 @@ The status bar shows the current state: Watching, Committing, Pushing, Pulling, 
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `GitNote: Enable` | Enable auto-commit/push/pull |
-| `GitNote: Disable` | Disable automation |
-| `GitNote: Toggle` | Toggle on/off |
+| Command             | Description                        |
+| ------------------- | ---------------------------------- |
+| `GitNote: Enable`   | Enable auto-commit/push/pull       |
+| `GitNote: Disable`  | Disable automation                 |
+| `GitNote: Toggle`   | Toggle on/off                      |
 | `GitNote: Sync Now` | Immediately pull, commit, and push |
 
 ## Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `gitnote.enabled` | `false` | Enable GitNote |
-| `gitnote.commitDelay` | `10` | Delay (seconds) before auto-commit after save |
-| `gitnote.autoPush` | `true` | Push to remote after commit |
-| `gitnote.pullOnStartup` | `true` | Pull on startup |
-| `gitnote.pullAfterIdle` | `true` | Pull on window focus or first interaction after idle |
-| `gitnote.idleThreshold` | `30` | Idle threshold in seconds |
-| `gitnote.filePattern` | `"**/*"` | Glob pattern for target files |
-| `gitnote.excludeBranches` | `[]` | Branches to exclude |
-| `gitnote.commitMessageFormat` | `"GitNote: {timestamp}"` | Commit message template |
-| `gitnote.commitOnFocusLost` | `true` | Commit and push pending changes on window focus loss |
-| `gitnote.showCountdown` | `true` | Show countdown timer in status bar |
-| `gitnote.conflictBehavior` | `"pause"` | `"pause"` or `"notify"` on conflicts (desktop only) |
+| Setting                       | Default                  | Description                                          |
+| ----------------------------- | ------------------------ | ---------------------------------------------------- |
+| `gitnote.enabled`             | `false`                  | Enable GitNote                                       |
+| `gitnote.commitDelay`         | `10`                     | Delay (seconds) before auto-commit after save        |
+| `gitnote.autoPush`            | `true`                   | Push to remote after commit                          |
+| `gitnote.pullOnStartup`       | `true`                   | Pull on startup                                      |
+| `gitnote.pullAfterIdle`       | `true`                   | Pull on window focus or first interaction after idle |
+| `gitnote.idleThreshold`       | `30`                     | Idle threshold in seconds                            |
+| `gitnote.filePattern`         | `"**/*"`                 | Glob pattern for target files                        |
+| `gitnote.excludeBranches`     | `[]`                     | Branches to exclude                                  |
+| `gitnote.commitMessageFormat` | `"GitNote: {timestamp}"` | Commit message template                              |
+| `gitnote.commitOnFocusLost`   | `true`                   | Commit and push pending changes on window focus loss |
+| `gitnote.showCountdown`       | `true`                   | Show countdown timer in status bar                   |
+| `gitnote.conflictBehavior`    | `"pause"`                | `"pause"` or `"notify"` on conflicts (desktop only)  |
 
 ### Commit message variables
 
