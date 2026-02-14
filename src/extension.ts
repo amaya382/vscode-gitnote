@@ -110,8 +110,24 @@ async function initializeDesktop(
 ): Promise<void> {
   logger.info("Initializing in desktop mode");
 
-  const gitExtension =
+  let gitExtension =
     vscode.extensions.getExtension<GitExtension>("vscode.git");
+  if (!gitExtension) {
+    logger.info("Git extension not yet available, waiting...");
+    gitExtension = await new Promise<
+      vscode.Extension<GitExtension> | undefined
+    >((resolve) => {
+      const disposable = vscode.extensions.onDidChange(() => {
+        const ext =
+          vscode.extensions.getExtension<GitExtension>("vscode.git");
+        if (ext) {
+          disposable.dispose();
+          resolve(ext);
+        }
+      });
+      context.subscriptions.push(disposable);
+    });
+  }
   if (!gitExtension) {
     logger.error("Git extension not found");
     return;
