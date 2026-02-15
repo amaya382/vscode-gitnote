@@ -2,16 +2,16 @@
   "name": "gitnote",
   "displayName": "GitNote",
   "description": "Auto-commit, push, and pull for note-taking repositories",
-  "version": "0.2.1",
+  "version": "0.2.0",
   "publisher": "amaya382",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/amaya382/gitnote"
+    "url": "https://github.com/amaya382/vscode-gitnote"
   },
-  "homepage": "https://github.com/amaya382/gitnote#readme",
+  "homepage": "https://github.com/amaya382/vscode-gitnote#readme",
   "bugs": {
-    "url": "https://github.com/amaya382/gitnote/issues"
+    "url": "https://github.com/amaya382/vscode-gitnote/issues"
   },
   "icon": "images/icon.png",
   "keywords": [
